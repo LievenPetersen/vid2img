@@ -2,7 +2,7 @@ use gst::gst_element_error;
 use gst::prelude::*;
 use gstreamer as gst;
 use gstreamer_app as gst_app;
-use std::sync::mpsc::{sync_channel, Receiver, TryRecvError, TrySendError};
+use std::sync::mpsc::{sync_channel, Receiver, RecvError, TrySendError};
 use std::sync::Once;
 
 pub type FrameData = Vec<u8>;
@@ -155,9 +155,9 @@ impl Iterator for VideoStreamIterator {
     type Item = Result<Option<FrameData>, StreamError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.receiver.try_recv() {
+        match self.receiver.recv() {
             Ok(event) => return Some(event),
-            Err(TryRecvError::Empty) => {
+            Err(RecvError) => {
                 // Check if there are errors in the GStreamer pipeline itself.
                 if let Some(msg) = self.bus.pop() {
                     use gst::MessageView;
@@ -184,10 +184,6 @@ impl Iterator for VideoStreamIterator {
                         _ => (),
                     }
                 }
-            }
-            Err(TryRecvError::Disconnected) => {
-                log::debug!("The Pipeline channel is disconnected: {}", self.description);
-                return None;
             }
         }
         // Nothing to report in this iteration.
