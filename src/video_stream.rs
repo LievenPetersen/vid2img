@@ -2,7 +2,7 @@ use gst::gst_element_error;
 use gst::prelude::*;
 use gstreamer as gst;
 use gstreamer_app as gst_app;
-use std::sync::mpsc::{sync_channel, Receiver, RecvError, TrySendError};
+use std::sync::mpsc::{sync_channel, Receiver, RecvError};
 use std::sync::Once;
 
 pub type FrameData = Vec<u8>;
@@ -111,14 +111,11 @@ impl IntoIterator for VideoStream {
                     })?;
                     log::trace!("Frame extracted from pipeline");
 
-                    match sender.try_send(Ok(Some(buffer.to_vec()))) {
+                    match sender.send(Ok(Some(buffer.to_vec()))) {
                         Ok(_) => Ok(gst::FlowSuccess::Ok),
-                        Err(TrySendError::Full(_)) => {
-                            log::trace!("Channel is full, discarded frame");
-                            Ok(gst::FlowSuccess::Ok)
-                        }
-                        Err(TrySendError::Disconnected(_)) => {
-                            log::debug!("Returning EOS in pipeline callback fn");
+                        Err(send_error) => {
+                            log::debug!("{:?}", send_error);
+                            log::debug!("Receiver disconnected, returning EOS in pipeline callback fn");
                             Err(gst::FlowError::Eos)
                         }
                     }
